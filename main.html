@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Sabay Cook</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+<style>
+  /* Quick styling for image previews and food image */
+  .image-preview img {
+    width: 100px;
+    height: 100px;
+    object-fit: cover;
+    margin: 5px;
+    border-radius: 5px;
+    border: 1px solid #ccc;
+  }
+  .meat-card.selected {
+    border: 2px solid #4CAF50;
+    transform: scale(1.05);
+  }
+  .food-image {
+    width: 300px;
+    height: auto;
+    margin: 10px 0;
+    border-radius: 10px;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+  }
+  .recommend-output {
+    margin-top: 20px;
+    padding: 15px;
+    border: 1px solid #ddd;
+    border-radius: 10px;
+    background: #fafafa;
+  }
+</style>
+</head>
+<body class="main-page">
+
+<a href="{{ url_for('home') }}" class="back-btn">← Back</a>
+
+<header>
+  <h1>Sabay Cook 🍲</h1>
+  <p>Upload your ingredients and get a recipe!</p>
+</header>
+
+<!-- Upload Section -->
+<section class="upload-section">
+  <h2>1. Upload Your Ingredient Images</h2>
+  <input type="file" id="imageUpload" multiple />
+  <div id="imagePreview" class="image-preview">No image selected</div>
+  <h3>Detected Ingredients:</h3>
+  <p id="detectedOutput">—</p>
+</section>
+
+<!-- Meat Selection -->
+<section class="meat-selection">
+  <h2>2. Select Your Meat Type</h2>
+  <div class="meat-options">
+    <div class="meat-card" data-meat="None">
+      <span class="tick">✓</span>
+      <img src="{{ url_for('static', filename='images/none.webp') }}">
+      <p>None</p>
+    </div>
+    <div class="meat-card" data-meat="Pork">
+      <span class="tick">✓</span>
+      <img src="{{ url_for('static', filename='images/pork.webp') }}">
+      <p>Pork</p>
+    </div>
+    <div class="meat-card" data-meat="Beef">
+      <span class="tick">✓</span>
+      <img src="{{ url_for('static', filename='images/Beef.webp') }}">
+      <p>Beef</p>
+    </div>
+    <div class="meat-card" data-meat="Chicken">
+      <span class="tick">✓</span>
+      <img src="{{ url_for('static', filename='images/chicken.jpg') }}">
+      <p>Chicken</p>
+    </div>
+    <div class="meat-card" data-meat="Fish">
+      <span class="tick">✓</span>
+      <img src="{{ url_for('static', filename='images/fish.webp') }}">
+      <p>Fish</p>
+    </div>
+  </div>
+</section>
+
+<!-- Recommendation Section -->
+<section class="recommendation">
+  <button id="recommendBtn" class="btn">Show Recommendation</button>
+  <div id="recommendOutput" class="recommend-output">
+    <p>Your food recommendation will appear here...</p>
+  </div>
+</section>
+
+<script>
+const imageUpload = document.getElementById("imageUpload");
+const imagePreview = document.getElementById("imagePreview");
+const detectedOutput = document.getElementById("detectedOutput");
+
+let selectedImages = [];
+let selectedMeat = [];
+
+// Image preview + upload
+imageUpload.addEventListener("change", () => {
+  selectedImages = Array.from(imageUpload.files);
+  imagePreview.innerHTML = "";
+
+  if (!selectedImages.length) {
+    imagePreview.textContent = "No image selected";
+    return;
+  }
+
+  selectedImages.forEach(file => {
+    const img = document.createElement("img");
+    img.src = URL.createObjectURL(file);
+    imagePreview.appendChild(img);
+  });
+
+  const formData = new FormData();
+  selectedImages.forEach(img => formData.append("images", img));
+
+  fetch("/upload", { method: "POST", body: formData })
+    .then(res => res.json())
+    .then(data => {
+      detectedOutput.textContent = data.detectedIngredients.join(", ");
+    });
+});
+
+// Meat selection
+document.querySelectorAll(".meat-card").forEach(card => {
+  card.addEventListener("click", () => {
+    const meat = card.dataset.meat;
+
+    if (meat === "None") {
+      selectedMeat = [];
+      document.querySelectorAll(".meat-card").forEach(c => c.classList.remove("selected"));
+      card.classList.add("selected");
+      return;
+    }
+
+    card.classList.toggle("selected");
+    if (selectedMeat.includes(meat)) {
+      selectedMeat = selectedMeat.filter(m => m !== meat);
+    } else {
+      selectedMeat.push(meat);
+    }
+  });
+});
+
+document.getElementById("recommendBtn").addEventListener("click", () => {
+  const ingredients = detectedOutput.textContent.split(", ").filter(Boolean);
+
+  fetch("/recommend", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ingredients, meat: selectedMeat })
+  })
+  .then(res => res.json())
+  .then(data => {
+
+    if (!data.recommended.length) {
+      document.getElementById("recommendOutput").innerHTML =
+        "<p>No recipes found.</p>";
+      return;
+    }
+
+    // Show ALL recommended recipes
+    let html = "<h2>🍲 Recommended Recipes</h2>";
+
+    data.recommended.forEach(recipe => {
+      html += `
+        <div class="recipe-card">
+          <h3>${recipe.recipe_title}</h3>
+          
+          <img src="${recipe.image}" class="food-image">
+
+          <h4>Ingredients:</h4>
+          <ul>
+            ${recipe.ingredients.map(i => `<li>${i}</li>`).join("")}
+          </ul>
+
+          <h4>Instructions:</h4>
+          <p>${recipe.instructions}</p>
+        </div>
+        <hr>
+      `;
+    });
+
+    document.getElementById("recommendOutput").innerHTML = html;
+  });
+});
+
+</script>
+
+</body>
+</html>
